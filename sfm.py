@@ -16,7 +16,7 @@ class Camera:
 class SFM:
     """Represents the main reconstruction loop"""
 
-    def __init__(self, views, matches, K, is_epipolar=False):
+    def __init__(self, views, matches, K, is_epipolar=False, use_BA=False):
 
         self.views = views  # list of views
         self.matches = matches  # dictionary of matches
@@ -29,6 +29,7 @@ class SFM:
         self.errors = []  # list of mean reprojection errors taken at the end of every new view being added
         self.is_epipolar = is_epipolar
         self.Camera = Camera(K[0, 0], K[1, 1], K[0, 2], K[1, 2])
+        self.use_BA = use_BA
 
         for view in self.views:
             self.names.append(view.name)
@@ -150,41 +151,41 @@ class SFM:
             self.point_map[(self.get_index_of_view(view2), match_object.inliers2[i])] = self.point_counter
             self.point_counter += 1
 
-        # # # Bundle adjustment   
-        # if  self.get_index_of_view(view1) == 11:
-        #     # Bundle adjustment
-        #     ba = BundleAdjustment()
+        # Bundle adjustment   
+        if  self.use_BA and self.get_index_of_view(view1) > 1:
+            # Bundle adjustment
+            ba = BundleAdjustment()
 
-        #     # 添加相机姿态顶点
-        #     for i, view in enumerate([view1, view2]):
-        #         pose = g2o.Isometry3d(np.hstack((view.R, view.t.reshape(3, 1))))
-        #         ba.add_pose(i, pose, self.Camera, fixed=(i == 0))  # 固定第一个相机的姿态
+            # 添加相机姿态顶点
+            for i, view in enumerate([view1, view2]):
+                pose = g2o.Isometry3d(np.hstack((view.R, view.t.reshape(3, 1))))
+                ba.add_pose(i, pose, self.Camera, fixed=(i == 0))  # 固定第一个相机的姿态
 
-        #     for i, point_3D in enumerate(points_3D_list):
-        #         # 添加3D点顶点
-        #         ba.add_point(i, point_3D)
+            for i, point_3D in enumerate(points_3D_list):
+                # 添加3D点顶点
+                ba.add_point(i, point_3D)
 
-        #         # 添加边
-        #         u1 = pixel_points1[i, :]
-        #         u2 = pixel_points2[i, :]
-        #         point2D = np.array([u1[0], u1[1]])
-        #         ba.add_edge(i, 0, point2D)
-        #         point2D = np.array([u2[0], u2[1]])
-        #         ba.add_edge(i, 1, point2D)
+                # 添加边
+                u1 = pixel_points1[i, :]
+                u2 = pixel_points2[i, :]
+                point2D = np.array([u1[0], u1[1]])
+                ba.add_edge(i, 0, point2D)
+                point2D = np.array([u2[0], u2[1]])
+                ba.add_edge(i, 1, point2D)
 
-        #     ba.optimize()
+            ba.optimize()
 
-        #     # 更新3D点
-        #     for i, point_3D in enumerate(points_3D_list):
-        #         point_3D = ba.get_point(i)
-        #         points_3D_list[i] = point_3D
+            # 更新3D点
+            for i, point_3D in enumerate(points_3D_list):
+                point_3D = ba.get_point(i)
+                points_3D_list[i] = point_3D
 
-        #     # 更新相机姿态
-        #     for i, view in enumerate([view1, view2]):
-        #         pose = ba.get_pose(i)
-        #         view.R = ba.quaternion_to_rotation_matrix(pose.rotation())
-        #         view.t = np.array(pose.translation()).reshape(3, 1)
-        #     logging.info("Bundle Adjustment od %s and %s is done", view1.name, view2.name)
+            # 更新相机姿态
+            for i, view in enumerate([view1, view2]):
+                pose = ba.get_pose(i)
+                view.R = ba.quaternion_to_rotation_matrix(pose.rotation())
+                view.t = np.array(pose.translation()).reshape(3, 1)
+            logging.info("Bundle Adjustment od %s and %s is done", view1.name, view2.name)
             
         self.points_3D = np.concatenate((self.points_3D, points_3D_list), axis=0)
 
@@ -255,6 +256,9 @@ class SFM:
         for pose_id, view in enumerate(views):
             pose = g2o.Isometry3d(view.R, view.t)
             ba.add_pose(pose_id, pose, self.Camera)
+            # fix the first pose
+            if pose_id == 0:
+                ba.vertex(pose_id).set_fixed(True)
 
         # add 3D points to the BA object
         for point_id, point in enumerate(points_3D):
@@ -295,17 +299,11 @@ class SFM:
             ba.add_point(i, point_3D)
 
             for j, view in enumerate(self.done):
-                match_object = self.matches[(view.name, view.name)]
-                pixel_points1, pixel_points2 = get_keypoints_from_indices(keypoints1=view.keypoints,
-                                                                        keypoints2=view.keypoints,
-                                                                        index_list1=match_object.inliers1,
-                                                                        index_list2=match_object.inliers2)
-                pixel_points1 = cv2.convertPointsToHomogeneous(pixel_points1)[:, 0, :]
-                pixel_points2 = cv2.convertPointsToHomogeneous(pixel_points2)[:, 0, :]
-                u1 = pixel_points1[i, :]
-                u2 = pixel_points2[i, :]
-                point2D = np.array([u1[0], u1[1]])
-                ba.add_edge(i, j, point2D)
+                # find if the point is in the view
+                for k in range(len(view.keypoints)):
+                    if (j, k) in self.point_map:
+                        point2D = view.keypoints[k].pt
+                        ba.add_edge(i, j, point2D)
 
         ba.optimize()
 
@@ -363,11 +361,11 @@ class SFM:
             self.compute_pose(view1=self.views[i])
             logging.info("Mean reprojection error for %d images is %f", i+1, self.errors[i])
             self.plot_points()
-            logging.info("Points plotted for %d views", i+1)
+            # logging.info("Points plotted for %d views", i+1)
 
         logging.info("Reconstruction complete")
-        # self.cal_rep_for_all()
+        # # self.cal_rep_for_all()
         # self.bundle_adjustment_for_all()
         # self.cal_rep_for_all()
         self.save_poses_and_rep()
-        logging.info("Poses and reprojection errors saved to file")
+        # # logging.info("Poses and reprojection errors saved to file")
