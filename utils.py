@@ -13,7 +13,8 @@ def get_keypoints_from_indices(keypoints1, index_list1, keypoints2, index_list2)
 
 def get_3D_point(u1, P1, u2, P2):
     """Solves for 3D point using homogeneous 2D points and the respective camera matrices"""
-
+    # check shapes of u1, P1, u2, P2
+    # print(u1.shape, P1.shape, u2.shape, P2.shape)
     A = np.array([[u1[0] * P1[2, 0] - P1[0, 0], u1[0] * P1[2, 1] - P1[0, 1], u1[0] * P1[2, 2] - P1[0, 2]],
                   [u1[1] * P1[2, 0] - P1[1, 0], u1[1] * P1[2, 1] - P1[1, 1], u1[1] * P1[2, 2] - P1[1, 2]],
                   [u2[0] * P2[2, 0] - P2[0, 0], u2[0] * P2[2, 1] - P2[0, 1], u2[0] * P2[2, 2] - P2[0, 2]],

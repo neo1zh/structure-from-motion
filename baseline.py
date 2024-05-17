@@ -5,10 +5,11 @@ import logging
 class Baseline:
     """Represents the functions that compute the baseline pose from the initial images of a reconstruction"""
 
-    def __init__(self, view1, view2, match_object):
+    def __init__(self, view1, view2, match_object, is_initial=False):
 
         self.view1 = view1  # first view
-        self.view1.R = np.eye(3, 3)  # identity rotation since the first view is said to be at the origin
+        if is_initial:
+            self.view1.R = np.eye(3, 3)  # identity rotation since the first view is said to be at the origin
         self.view2 = view2  # second view
         self.match_object = match_object  # match object between first and second view
 
@@ -43,15 +44,19 @@ class Baseline:
                 if reprojection_error > 100.0 or not check_triangulation(points_3D, np.hstack((R2, t1))):
 
                     # solution 4
+                    # logging.info("Chose solution 4")
                     return R2, t2
 
                 else:
+                    # logging.info("Chose solution 3")
                     return R2, t1
 
             else:
+                # logging.info("Chose solution 2")
                 return R1, t2
 
         else:
+            # logging.info("Chose solution 1")
             return R1, t1
 
     def triangulate(self, K, R, t):

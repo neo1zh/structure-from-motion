@@ -87,7 +87,6 @@ def create_matches(views):
     """Computes matches between every possible pair of views and stores in a dictionary"""
 
     match_path = False
-
     root_path = views[0].root_path
 
     if os.path.exists(os.path.join(root_path, 'matches')):

@@ -12,7 +12,8 @@ def run(args):
     views = create_views(args.root_dir, args.image_format)
     matches = create_matches(views)
     K = np.loadtxt(os.path.join(args.root_dir, 'images', 'K.txt'))
-    sfm = SFM(views, matches, K)
+    print(args.is_epipolar)
+    sfm = SFM(views, matches, K, args.is_epipolar)
     sfm.reconstruct()
 
 
@@ -24,6 +25,8 @@ def set_args(parser):
                         help='type of features to be extracted [sift | surf | orb]')
     parser.add_argument('--image_format', action='store', type=str, dest='image_format', default='jpg',
                         help='extension of the images in the images/ folder')
+    parser.add_argument('--is_epipolar', action='store', type=bool, dest='is_epipolar', default=False,
+                        help='use epipolar to construct.')
 
 
 if __name__ == '__main__':

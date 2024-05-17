@@ -1,0 +1,4 @@
+opencv-python
+opencv-contrib-python
+g2o-python
+open3d
